@@ -9,7 +9,7 @@
 [![License](https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true)](https://www.gnu.org/licenses/gpl-3.0.en.html)
 
 3x-ui panel supporting multi-protocol, **Multi-lang (English,Farsi,Chinese,Russian,Vietnamese)**
-**If you think this project is helpful to you, you may wish to give a** :star2:
+**If you think this project is helpful to you, you may wish to give a** 🌟
 
 **Buy Me a Coffee :**
 
@@ -18,7 +18,7 @@
 # Install & Upgrade
 
 ```
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/kenhtaymay/3x-ui/arm/install.sh)
 ```
 
 # Install custom version
@@ -26,7 +26,7 @@ bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.
 To install your desired version you can add the version to the end of install command. Example for ver `v1.7.8`:
 
 ```
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh) v1.7.8
+bash <(curl -Ls https://raw.githubusercontent.com/kenhtaymay/3x-ui/master/install.sh) v1.7.8
 ```
 
 # SSL
@@ -66,7 +66,7 @@ You also can use `x-ui` menu then select `SSL Certificate Management`
 ```sh
 ARCH=$(uname -m)
 [[ "${ARCH}" == "aarch64" || "${ARCH}" == "arm64" ]] && XUI_ARCH="arm64" || XUI_ARCH="amd64"
-wget https://github.com/MHSanaei/3x-ui/releases/latest/download/x-ui-linux-${XUI_ARCH}.tar.gz
+wget https://github.com/kenhtaymay/3x-ui/releases/latest/download/x-ui-linux-${XUI_ARCH}.tar.gz
 ```
 
 2. Once the compressed package is downloaded, execute the following commands to install or upgrade x-ui:
@@ -98,14 +98,12 @@ systemctl restart x-ui
    ```sh
    bash <(curl -sSL https://get.docker.com)
    ```
-
 2. Clone the Project Repository:
 
    ```sh
-   git clone https://github.com/MHSanaei/3x-ui.git
+   git clone https://github.com/kenhtaymay/3x-ui.git
    cd 3x-ui
    ```
-
 3. Start the Service
 
    ```sh
@@ -145,6 +143,7 @@ Before you set ssl on settings
 After you set ssl on settings
 
 - https://yourdomain:2053/panel
+
 </details>
 
 # Xray Configurations:
@@ -174,13 +173,11 @@ If you want to use routing to WARP follow steps as below:
    ```sh
    warp u
    ```
-
 2. Install WARP on **socks proxy mode**:
 
    ```sh
    bash <(curl -sSL https://raw.githubusercontent.com/hamid-gh98/x-ui-scripts/main/install_warp_proxy.sh)
    ```
-
 3. Turn on the config you need in panel or [Copy and paste this file to Xray Configuration](./media/configs/traffic+block-ads+warp.json)
 
    Config Features:
@@ -201,7 +198,6 @@ If you want to use routing to WARP follow steps as below:
 - For versions up to `v1.6.1`:
 
   - IP limit is built-in into the panel.
-
 - For versions `v1.7.0` and newer:
 
   - To make IP Limit work properly, you need to install fail2ban and its required files by following these steps:
@@ -252,28 +248,25 @@ Reference syntax:
 - Check depleted users
 - Receive backup by request and in periodic reports
 - Multi language bot
+
 </details>
 
 # Setting up Telegram bot
 
 - Start [Botfather](https://t.me/BotFather) in your Telegram account:
-    ![Botfather](./media/botfather.png)
-  
+  ![Botfather](./media/botfather.png)
 - Create a new Bot using /newbot command: It will ask you 2 questions, A name and a username for your bot. Note that the username has to end with the word "bot".
-    ![Create new bot](./media/newbot.png)
-
+  ![Create new bot](./media/newbot.png)
 - Start the bot you've just created. You can find the link to your bot here.
-    ![token](./media/token.png)
-
+  ![token](./media/token.png)
 - Enter your panel and config Telegram bot settings like below:
-![Panel Config](./media/panel-bot-config.png)
+  ![Panel Config](./media/panel-bot-config.png)
 
 Enter your bot token in input field number 3.
 Enter the user ID in input field number 4. The Telegram accounts with this id will be the bot admin. (You can enter more than one, Just separate them with ,)
 
 - How to get Telegram user ID? Use this [bot](https://t.me/useridinfobot), Start the bot and it will give you the Telegram user ID.
-![User ID](./media/user-id.png)
-
+  ![User ID](./media/user-id.png)
 
 # API routes
 
@@ -283,12 +276,12 @@ Enter the user ID in input field number 4. The Telegram accounts with this id wi
 - `/login` with `POST` user data: `{username: '', password: ''}` for login
 - `/panel/api/inbounds` base for following actions:
 
-| Method | Path                               | Action                                      |
-| :----: | ---------------------------------- | ------------------------------------------- |
-| `GET`  | `"/list"`                          | Get all inbounds                            |
-| `GET`  | `"/get/:id"`                       | Get inbound with inbound.id                 |
-| `GET`  | `"/getClientTraffics/:email"`      | Get Client Traffics with email              |
-| `GET`  | `"/createbackup"`                  | Telegram bot sends backup to admins         |
+|  Method  | Path                                 | Action                                      |
+| :------: | ------------------------------------ | ------------------------------------------- |
+| `GET` | `"/list"`                          | Get all inbounds                            |
+| `GET` | `"/get/:id"`                       | Get inbound with inbound.id                 |
+| `GET` | `"/getClientTraffics/:email"`      | Get Client Traffics with email              |
+| `GET` | `"/createbackup"`                  | Telegram bot sends backup to admins         |
 | `POST` | `"/add"`                           | Add inbound                                 |
 | `POST` | `"/del/:id"`                       | Delete Inbound                              |
 | `POST` | `"/update/:id"`                    | Update Inbound                              |
@@ -307,8 +300,8 @@ Enter the user ID in input field number 4. The Telegram accounts with this id wi
 - `client.id` for VMESS and VLESS
 - `client.password` for TROJAN
 - `client.email` for Shadowsocks
-
 - [Postman Collection](https://gist.github.com/mehdikhody/9a862801a2e41f6b5fb6bbc7e1326044)
+
 </details>
 
 # Environment Variables
@@ -316,13 +309,13 @@ Enter the user ID in input field number 4. The Telegram accounts with this id wi
 <details>
   <summary>Click for Environment Variables details</summary>
 
-| Variable       |                      Type                      | Default       |
-| -------------- | :--------------------------------------------: | :------------ |
+| Variable       |                          Type                          | Default         |
+| -------------- | :----------------------------------------------------: | :-------------- |
 | XUI_LOG_LEVEL  | `"debug"` \| `"info"` \| `"warn"` \| `"error"` | `"info"`      |
-| XUI_DEBUG      |                   `boolean`                    | `false`       |
-| XUI_BIN_FOLDER |                    `string`                    | `"bin"`       |
-| XUI_DB_FOLDER  |                    `string`                    | `"/etc/x-ui"` |
-| XUI_LOG_FOLDER |                    `string`                    | `"/var/log"`  |
+| XUI_DEBUG      |                      `boolean`                      | `false`       |
+| XUI_BIN_FOLDER |                       `string`                       | `"bin"`       |
+| XUI_DB_FOLDER  |                       `string`                       | `"/etc/x-ui"` |
+| XUI_LOG_FOLDER |                       `string`                       | `"/var/log"`  |
 
 Example:
 

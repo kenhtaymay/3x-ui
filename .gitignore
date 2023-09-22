@@ -13,3 +13,4 @@ dist/
 release/
 /release.sh
 /x-ui
+xui-release
