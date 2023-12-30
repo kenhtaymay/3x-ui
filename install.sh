@@ -51,7 +51,7 @@ elif [[ "${release}" == "fedora" ]]; then
     fi
 
 elif [[ "${release}" == "debian" ]]; then
-    if [[ ${os_version} -lt 10 ]]; then
+    if [[ ${os_version} -lt 9 ]]; then
         echo -e "${red} Please use Debian 10 or higher ${plain}\n" && exit 1
     fi
 elif [[ "${release}" == "arch" ]]; then
