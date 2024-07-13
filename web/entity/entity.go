@@ -2,12 +2,11 @@ package entity
 
 import (
 	"crypto/tls"
-	"encoding/json"
 	"net"
 	"strings"
 	"time"
+
 	"x-ui/util/common"
-	"x-ui/xray"
 )
 
 type Msg struct {
@@ -16,47 +15,46 @@ type Msg struct {
 	Obj     interface{} `json:"obj"`
 }
 
-type Pager struct {
-	Current  int         `json:"current"`
-	PageSize int         `json:"page_size"`
-	Total    int         `json:"total"`
-	OrderBy  string      `json:"order_by"`
-	Desc     bool        `json:"desc"`
-	Key      string      `json:"key"`
-	List     interface{} `json:"list"`
-}
-
 type AllSetting struct {
-	WebListen          string `json:"webListen" form:"webListen"`
-	WebDomain          string `json:"webDomain" form:"webDomain"`
-	WebPort            int    `json:"webPort" form:"webPort"`
-	WebCertFile        string `json:"webCertFile" form:"webCertFile"`
-	WebKeyFile         string `json:"webKeyFile" form:"webKeyFile"`
-	WebBasePath        string `json:"webBasePath" form:"webBasePath"`
-	SessionMaxAge      int    `json:"sessionMaxAge" form:"sessionMaxAge"`
-	ExpireDiff         int    `json:"expireDiff" form:"expireDiff"`
-	TrafficDiff        int    `json:"trafficDiff" form:"trafficDiff"`
-	TgBotEnable        bool   `json:"tgBotEnable" form:"tgBotEnable"`
-	TgBotToken         string `json:"tgBotToken" form:"tgBotToken"`
-	TgBotChatId        string `json:"tgBotChatId" form:"tgBotChatId"`
-	TgRunTime          string `json:"tgRunTime" form:"tgRunTime"`
-	TgBotBackup        bool   `json:"tgBotBackup" form:"tgBotBackup"`
-	TgBotLoginNotify   bool   `json:"tgBotLoginNotify" form:"tgBotLoginNotify"`
-	TgCpu              int    `json:"tgCpu" form:"tgCpu"`
-	TgLang             string `json:"tgLang" form:"tgLang"`
-	XrayTemplateConfig string `json:"xrayTemplateConfig" form:"xrayTemplateConfig"`
-	TimeLocation       string `json:"timeLocation" form:"timeLocation"`
-	SecretEnable       bool   `json:"secretEnable" form:"secretEnable"`
-	SubEnable          bool   `json:"subEnable" form:"subEnable"`
-	SubListen          string `json:"subListen" form:"subListen"`
-	SubPort            int    `json:"subPort" form:"subPort"`
-	SubPath            string `json:"subPath" form:"subPath"`
-	SubDomain          string `json:"subDomain" form:"subDomain"`
-	SubCertFile        string `json:"subCertFile" form:"subCertFile"`
-	SubKeyFile         string `json:"subKeyFile" form:"subKeyFile"`
-	SubUpdates         int    `json:"subUpdates" form:"subUpdates"`
-	SubEncrypt         bool   `json:"subEncrypt" form:"subEncrypt"`
-	SubShowInfo        bool   `json:"subShowInfo" form:"subShowInfo"`
+	WebListen        string `json:"webListen" form:"webListen"`
+	WebDomain        string `json:"webDomain" form:"webDomain"`
+	WebPort          int    `json:"webPort" form:"webPort"`
+	WebCertFile      string `json:"webCertFile" form:"webCertFile"`
+	WebKeyFile       string `json:"webKeyFile" form:"webKeyFile"`
+	WebBasePath      string `json:"webBasePath" form:"webBasePath"`
+	SessionMaxAge    int    `json:"sessionMaxAge" form:"sessionMaxAge"`
+	PageSize         int    `json:"pageSize" form:"pageSize"`
+	ExpireDiff       int    `json:"expireDiff" form:"expireDiff"`
+	TrafficDiff      int    `json:"trafficDiff" form:"trafficDiff"`
+	RemarkModel      string `json:"remarkModel" form:"remarkModel"`
+	TgBotEnable      bool   `json:"tgBotEnable" form:"tgBotEnable"`
+	TgBotToken       string `json:"tgBotToken" form:"tgBotToken"`
+	TgBotProxy       string `json:"tgBotProxy" form:"tgBotProxy"`
+	TgBotChatId      string `json:"tgBotChatId" form:"tgBotChatId"`
+	TgRunTime        string `json:"tgRunTime" form:"tgRunTime"`
+	TgBotBackup      bool   `json:"tgBotBackup" form:"tgBotBackup"`
+	TgBotLoginNotify bool   `json:"tgBotLoginNotify" form:"tgBotLoginNotify"`
+	TgCpu            int    `json:"tgCpu" form:"tgCpu"`
+	TgLang           string `json:"tgLang" form:"tgLang"`
+	TimeLocation     string `json:"timeLocation" form:"timeLocation"`
+	SecretEnable     bool   `json:"secretEnable" form:"secretEnable"`
+	SubEnable        bool   `json:"subEnable" form:"subEnable"`
+	SubListen        string `json:"subListen" form:"subListen"`
+	SubPort          int    `json:"subPort" form:"subPort"`
+	SubPath          string `json:"subPath" form:"subPath"`
+	SubDomain        string `json:"subDomain" form:"subDomain"`
+	SubCertFile      string `json:"subCertFile" form:"subCertFile"`
+	SubKeyFile       string `json:"subKeyFile" form:"subKeyFile"`
+	SubUpdates       int    `json:"subUpdates" form:"subUpdates"`
+	SubEncrypt       bool   `json:"subEncrypt" form:"subEncrypt"`
+	SubShowInfo      bool   `json:"subShowInfo" form:"subShowInfo"`
+	SubURI           string `json:"subURI" form:"subURI"`
+	SubJsonPath      string `json:"subJsonPath" form:"subJsonPath"`
+	SubJsonURI       string `json:"subJsonURI" form:"subJsonURI"`
+	SubJsonFragment  string `json:"subJsonFragment" form:"subJsonFragment"`
+	SubJsonMux       string `json:"subJsonMux" form:"subJsonMux"`
+	SubJsonRules     string `json:"subJsonRules" form:"subJsonRules"`
+	Datepicker       string `json:"datepicker" form:"datepicker"`
 }
 
 func (s *AllSetting) CheckValid() error {
@@ -82,8 +80,8 @@ func (s *AllSetting) CheckValid() error {
 		return common.NewError("Sub port is not a valid port:", s.SubPort)
 	}
 
-	if s.SubPort == s.WebPort {
-		return common.NewError("Sub and Web could not use same port:", s.SubPort)
+	if (s.SubPort == s.WebPort) && (s.WebListen == s.SubListen) {
+		return common.NewError("Sub and Web could not use same ip:port, ", s.SubListen, ":", s.SubPort, " & ", s.WebListen, ":", s.WebPort)
 	}
 
 	if s.WebCertFile != "" || s.WebKeyFile != "" {
@@ -106,14 +104,21 @@ func (s *AllSetting) CheckValid() error {
 	if !strings.HasSuffix(s.WebBasePath, "/") {
 		s.WebBasePath += "/"
 	}
-
-	xrayConfig := &xray.Config{}
-	err := json.Unmarshal([]byte(s.XrayTemplateConfig), xrayConfig)
-	if err != nil {
-		return common.NewError("xray template config invalid:", err)
+	if !strings.HasPrefix(s.SubPath, "/") {
+		s.SubPath = "/" + s.SubPath
+	}
+	if !strings.HasSuffix(s.SubPath, "/") {
+		s.SubPath += "/"
 	}
 
-	_, err = time.LoadLocation(s.TimeLocation)
+	if !strings.HasPrefix(s.SubJsonPath, "/") {
+		s.SubJsonPath = "/" + s.SubJsonPath
+	}
+	if !strings.HasSuffix(s.SubJsonPath, "/") {
+		s.SubJsonPath += "/"
+	}
+
+	_, err := time.LoadLocation(s.TimeLocation)
 	if err != nil {
 		return common.NewError("time location not exist:", s.TimeLocation)
 	}

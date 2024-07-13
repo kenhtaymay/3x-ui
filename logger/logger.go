@@ -8,12 +8,14 @@ import (
 	"github.com/op/go-logging"
 )
 
-var logger *logging.Logger
-var logBuffer []struct {
-	time  string
-	level logging.Level
-	log   string
-}
+var (
+	logger    *logging.Logger
+	logBuffer []struct {
+		time  string
+		level logging.Level
+		log   string
+	}
+)
 
 func init() {
 	InitLogger(logging.INFO)
@@ -26,17 +28,15 @@ func InitLogger(level logging.Level) {
 	var format logging.Formatter
 	ppid := os.Getppid()
 
-	if ppid == 1 {
-		backend, err = logging.NewSyslogBackend("")
-		format = logging.MustStringFormatter(
-			`%{level} - %{message}`,
-		)
-	}
-	if err != nil || ppid != 1 {
+	backend, err = logging.NewSyslogBackend("")
+	if err != nil {
+		println(err)
 		backend = logging.NewLogBackend(os.Stderr, "", 0)
-		format = logging.MustStringFormatter(
-			`%{time:2006/01/02 15:04:05} %{level} - %{message}`,
-		)
+	}
+	if ppid > 0 && err != nil {
+		format = logging.MustStringFormatter(`%{time:2006/01/02 15:04:05} %{level} - %{message}`)
+	} else {
+		format = logging.MustStringFormatter(`%{level} - %{message}`)
 	}
 
 	backendFormatter := logging.NewBackendFormatter(backend, format)
@@ -65,6 +65,16 @@ func Info(args ...interface{}) {
 func Infof(format string, args ...interface{}) {
 	logger.Infof(format, args...)
 	addToBuffer("INFO", fmt.Sprintf(format, args...))
+}
+
+func Notice(args ...interface{}) {
+	logger.Notice(args...)
+	addToBuffer("NOTICE", fmt.Sprint(args...))
+}
+
+func Noticef(format string, args ...interface{}) {
+	logger.Noticef(format, args...)
+	addToBuffer("NOTICE", fmt.Sprintf(format, args...))
 }
 
 func Warning(args ...interface{}) {

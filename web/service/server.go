@@ -23,12 +23,12 @@ import (
 	"x-ui/util/sys"
 	"x-ui/xray"
 
-	"github.com/shirou/gopsutil/v3/cpu"
-	"github.com/shirou/gopsutil/v3/disk"
-	"github.com/shirou/gopsutil/v3/host"
-	"github.com/shirou/gopsutil/v3/load"
-	"github.com/shirou/gopsutil/v3/mem"
-	"github.com/shirou/gopsutil/v3/net"
+	"github.com/shirou/gopsutil/v4/cpu"
+	"github.com/shirou/gopsutil/v4/disk"
+	"github.com/shirou/gopsutil/v4/host"
+	"github.com/shirou/gopsutil/v4/load"
+	"github.com/shirou/gopsutil/v4/mem"
+	"github.com/shirou/gopsutil/v4/net"
 )
 
 type ProcessState string
@@ -43,6 +43,7 @@ type Status struct {
 	T           time.Time `json:"-"`
 	Cpu         float64   `json:"cpu"`
 	CpuCores    int       `json:"cpuCores"`
+	LogicalPro  int       `json:"logicalPro"`
 	CpuSpeedMhz float64   `json:"cpuSpeedMhz"`
 	Mem         struct {
 		Current uint64 `json:"current"`
@@ -129,6 +130,13 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 	status.CpuCores, err = cpu.Counts(false)
 	if err != nil {
 		logger.Warning("get cpu cores count failed:", err)
+	}
+
+	status.LogicalPro = runtime.NumCPU()
+	if p != nil && p.IsRunning() {
+		status.AppStats.Uptime = p.GetUptime()
+	} else {
+		status.AppStats.Uptime = 0
 	}
 
 	cpuInfos, err := cpu.Info()
@@ -230,7 +238,7 @@ func (s *ServerService) GetStatus(lastStatus *Status) *Status {
 
 	status.AppStats.Mem = rtm.Sys
 	status.AppStats.Threads = uint32(runtime.NumGoroutine())
-	if p.IsRunning() {
+	if p != nil && p.IsRunning() {
 		status.AppStats.Uptime = p.GetUptime()
 	} else {
 		status.AppStats.Uptime = 0
@@ -304,6 +312,16 @@ func (s *ServerService) downloadXRay(version string) (string, error) {
 		arch = "64"
 	case "arm64":
 		arch = "arm64-v8a"
+	case "armv7":
+		arch = "arm32-v7a"
+	case "armv6":
+		arch = "arm32-v6"
+	case "armv5":
+		arch = "arm32-v5"
+	case "386":
+		arch = "32"
+	case "s390x":
+		arch = "s390x"
 	}
 
 	fileName := fmt.Sprintf("Xray-%s-%s.zip", osName, arch)
@@ -376,47 +394,9 @@ func (s *ServerService) UpdateXray(version string) error {
 		return err
 	}
 
-	downloadFile := func(fileName string, url string) error {
-		os.Remove(fileName)
-		file, err := os.OpenFile(fileName, os.O_CREATE|os.O_RDWR|os.O_TRUNC, fs.ModePerm)
-		if err != nil {
-			return err
-		}
-		defer file.Close()
-		resp, err := http.Get(url)
-		if err != nil {
-			return err
-		}
-		defer resp.Body.Close()
-		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("download file failed: %s", resp.Status)
-		}
-		_, err = io.Copy(file, resp.Body)
+	err = copyZipFile("xray", xray.GetBinaryPath())
+	if err != nil {
 		return err
-	}
-
-	copyFiles := map[string]string{
-		"xray":        xray.GetBinaryPath(),
-		"geosite.dat": xray.GetGeositePath(),
-		"geoip.dat":   xray.GetGeoipPath(),
-	}
-
-	downloadFiles := map[string]string{
-		xray.GetIranPath(): "https://github.com/MasterKia/iran-hosted-domains/releases/latest/download/iran.dat",
-	}
-
-	for fileName, filePath := range copyFiles {
-		err := copyZipFile(fileName, filePath)
-		if err != nil {
-			return err
-		}
-	}
-
-	for fileName, filePath := range downloadFiles {
-		err := downloadFile(fileName, filePath)
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil
@@ -464,6 +444,11 @@ func (s *ServerService) GetConfigJson() (interface{}, error) {
 }
 
 func (s *ServerService) GetDb() ([]byte, error) {
+	// Update by manually trigger a checkpoint operation
+	err := database.Checkpoint()
+	if err != nil {
+		return nil, err
+	}
 	// Open the file for reading
 	file, err := os.Open(config.GetDBPath())
 	if err != nil {

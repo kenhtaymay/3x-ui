@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"x-ui/config"
 	"x-ui/logger"
 	"x-ui/util/common"
@@ -23,8 +24,9 @@ import (
 	"x-ui/web/network"
 	"x-ui/web/service"
 
-	sessions "github.com/Calidity/gin-sessions"
-	"github.com/Calidity/gin-sessions/cookie"
+	"github.com/gin-contrib/gzip"
+	"github.com/gin-contrib/sessions"
+	"github.com/gin-contrib/sessions/cookie"
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 )
@@ -174,10 +176,11 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	if err != nil {
 		return nil, err
 	}
+	engine.Use(gzip.Gzip(gzip.DefaultCompression, gzip.WithExcludedPaths([]string{basePath + "panel/API/"})))
 	assetsBasePath := basePath + "assets/"
 
 	store := cookie.NewStore(secret)
-	engine.Use(sessions.Sessions("session", store))
+	engine.Use(sessions.Sessions("3x-ui", store))
 	engine.Use(func(c *gin.Context) {
 		c.Set("base_path", basePath)
 	})
@@ -238,11 +241,11 @@ func (s *Server) startTask() {
 	if err != nil {
 		logger.Warning("start xray failed:", err)
 	}
-	// Check whether xray is running every 30 seconds
-	s.cron.AddJob("@every 30s", job.NewCheckXrayRunningJob())
+	// Check whether xray is running every second
+	s.cron.AddJob("@every 1s", job.NewCheckXrayRunningJob())
 
-	// Check if xray needs to be restarted
-	s.cron.AddFunc("@every 10s", func() {
+	// Check if xray needs to be restarted every 30 seconds
+	s.cron.AddFunc("@every 30s", func() {
 		if s.xrayService.IsNeedRestartAndSetFalse() {
 			err := s.xrayService.RestartXray(false)
 			if err != nil {
@@ -265,7 +268,7 @@ func (s *Server) startTask() {
 
 	// Make a traffic condition every day, 8:30
 	var entry cron.EntryID
-	isTgbotenabled, err := s.settingService.GetTgbotenabled()
+	isTgbotenabled, err := s.settingService.GetTgbotEnabled()
 	if (err == nil) && (isTgbotenabled) {
 		runtime, err := s.settingService.GetTgbotRuntime()
 		if err != nil || runtime == "" {
@@ -293,7 +296,7 @@ func (s *Server) startTask() {
 }
 
 func (s *Server) Start() (err error) {
-	//This is an anonymous function, no function name
+	// This is an anonymous function, no function name
 	defer func() {
 		if err != nil {
 			s.Stop()
@@ -335,25 +338,21 @@ func (s *Server) Start() (err error) {
 	}
 	if certFile != "" || keyFile != "" {
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			listener.Close()
-			return err
+		if err == nil {
+			c := &tls.Config{
+				Certificates: []tls.Certificate{cert},
+			}
+			listener = network.NewAutoHttpsListener(listener)
+			listener = tls.NewListener(listener, c)
+			logger.Info("Web server running HTTPS on", listener.Addr())
+		} else {
+			logger.Error("Error loading certificates:", err)
+			logger.Info("Web server running HTTP on", listener.Addr())
 		}
-		c := &tls.Config{
-			Certificates: []tls.Certificate{cert},
-		}
-		listener = network.NewAutoHttpsListener(listener)
-		listener = tls.NewListener(listener, c)
-	}
-
-	if certFile != "" || keyFile != "" {
-		logger.Info("web server run https on", listener.Addr())
 	} else {
-		logger.Info("web server run http on", listener.Addr())
+		logger.Info("Web server running HTTP on", listener.Addr())
 	}
 	s.listener = listener
-
-	s.startTask()
 
 	s.httpServer = &http.Server{
 		Handler: engine,
@@ -363,7 +362,9 @@ func (s *Server) Start() (err error) {
 		s.httpServer.Serve(listener)
 	}()
 
-	isTgbotenabled, err := s.settingService.GetTgbotenabled()
+	s.startTask()
+
+	isTgbotenabled, err := s.settingService.GetTgbotEnabled()
 	if (err == nil) && (isTgbotenabled) {
 		tgBot := s.tgbotService.NewTgbot()
 		tgBot.Start(i18nFS)

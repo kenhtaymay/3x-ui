@@ -21,6 +21,7 @@ var db *gorm.DB
 var initializers = []func() error{
 	initUser,
 	initInbound,
+	initOutbound,
 	initSetting,
 	initInboundClientIps,
 	initClientTraffic,
@@ -49,6 +50,10 @@ func initUser() error {
 
 func initInbound() error {
 	return db.AutoMigrate(&model.Inbound{})
+}
+
+func initOutbound() error {
+	return db.AutoMigrate(&model.OutboundTraffics{})
 }
 
 func initSetting() error {
@@ -111,4 +116,13 @@ func IsSQLiteDB(file io.ReaderAt) (bool, error) {
 		return false, err
 	}
 	return bytes.Equal(buf, signature), nil
+}
+
+func Checkpoint() error {
+	// Update WAL
+	err := db.Exec("PRAGMA wal_checkpoint;").Error
+	if err != nil {
+		return err
+	}
+	return nil
 }

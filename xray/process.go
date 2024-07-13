@@ -1,7 +1,6 @@
 package xray
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -10,16 +9,12 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	"x-ui/config"
 	"x-ui/logger"
 	"x-ui/util/common"
-
-	"github.com/Workiva/go-datastructures/queue"
 )
 
 func GetBinaryName() string {
@@ -42,10 +37,6 @@ func GetGeoipPath() string {
 	return config.GetBinFolderPath() + "/geoip.dat"
 }
 
-func GetIranPath() string {
-	return config.GetBinFolderPath() + "/iran.dat"
-}
-
 func GetIPLimitLogPath() string {
 	return config.GetLogFolder() + "/3xipl.log"
 }
@@ -54,32 +45,40 @@ func GetIPLimitBannedLogPath() string {
 	return config.GetLogFolder() + "/3xipl-banned.log"
 }
 
-func GetAccessPersistentLogPath() string {
-	return config.GetLogFolder() + "/3xipl-access-persistent.log"
+func GetIPLimitBannedPrevLogPath() string {
+	return config.GetLogFolder() + "/3xipl-banned.prev.log"
 }
 
-func GetAccessLogPath() string {
+func GetAccessPersistentLogPath() string {
+	return config.GetLogFolder() + "/3xipl-ap.log"
+}
+
+func GetAccessPersistentPrevLogPath() string {
+	return config.GetLogFolder() + "/3xipl-ap.prev.log"
+}
+
+func GetAccessLogPath() (string, error) {
 	config, err := os.ReadFile(GetConfigPath())
 	if err != nil {
-		logger.Warningf("Something went wrong: %s", err)
+		logger.Warningf("Failed to read configuration file: %s", err)
+		return "", err
 	}
 
 	jsonConfig := map[string]interface{}{}
 	err = json.Unmarshal([]byte(config), &jsonConfig)
 	if err != nil {
-		logger.Warningf("Something went wrong: %s", err)
+		logger.Warningf("Failed to parse JSON configuration: %s", err)
+		return "", err
 	}
 
 	if jsonConfig["log"] != nil {
 		jsonLog := jsonConfig["log"].(map[string]interface{})
 		if jsonLog["access"] != nil {
-
 			accessLogPath := jsonLog["access"].(string)
-
-			return accessLogPath
+			return accessLogPath, nil
 		}
 	}
-	return ""
+	return "", err
 }
 
 func stopProcess(p *Process) {
@@ -102,8 +101,10 @@ type process struct {
 	version string
 	apiPort int
 
+	onlineClients []string
+
 	config    *Config
-	lines     *queue.Queue
+	logWriter *LogWriter
 	exitErr   error
 	startTime time.Time
 }
@@ -112,7 +113,7 @@ func newProcess(config *Config) *process {
 	return &process{
 		version:   "Unknown",
 		config:    config,
-		lines:     queue.New(100),
+		logWriter: NewLogWriter(),
 		startTime: time.Now(),
 	}
 }
@@ -132,17 +133,10 @@ func (p *process) GetErr() error {
 }
 
 func (p *process) GetResult() string {
-	if p.lines.Empty() && p.exitErr != nil {
+	if len(p.logWriter.lastLine) == 0 && p.exitErr != nil {
 		return p.exitErr.Error()
 	}
-	items, _ := p.lines.TakeUntil(func(item interface{}) bool {
-		return true
-	})
-	lines := make([]string, 0, len(items))
-	for _, item := range items {
-		lines = append(lines, item.(string))
-	}
-	return strings.Join(lines, "\n")
+	return p.logWriter.lastLine
 }
 
 func (p *process) GetVersion() string {
@@ -155,6 +149,14 @@ func (p *Process) GetAPIPort() int {
 
 func (p *Process) GetConfig() *Config {
 	return p.config
+}
+
+func (p *Process) GetOnlineClients() []string {
+	return p.onlineClients
+}
+
+func (p *Process) SetOnlineClients(users []string) {
+	p.onlineClients = users
 }
 
 func (p *Process) GetUptime() uint64 {
@@ -192,14 +194,21 @@ func (p *process) Start() (err error) {
 
 	defer func() {
 		if err != nil {
+			logger.Error("Failure in running xray-core process: ", err)
 			p.exitErr = err
 		}
 	}()
 
 	data, err := json.MarshalIndent(p.config, "", "  ")
 	if err != nil {
-		return common.NewErrorf("Failed to generate xray configuration file: %v", err)
+		return common.NewErrorf("Failed to generate XRAY configuration files: %v", err)
 	}
+
+	err = os.MkdirAll(config.GetLogFolder(), 0o770)
+	if err != nil {
+		logger.Warningf("Failed to create log folder: %s", err)
+	}
+
 	configPath := GetConfigPath()
 	err = os.WriteFile(configPath, data, fs.ModePerm)
 	if err != nil {
@@ -209,54 +218,15 @@ func (p *process) Start() (err error) {
 	cmd := exec.Command(GetBinaryPath(), "-c", configPath)
 	p.cmd = cmd
 
-	stdReader, err := cmd.StdoutPipe()
-	if err != nil {
-		return err
-	}
-	errReader, err := cmd.StderrPipe()
-	if err != nil {
-		return err
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	go func() {
-		defer wg.Done()
-		reader := bufio.NewReaderSize(stdReader, 8192)
-		for {
-			line, _, err := reader.ReadLine()
-			if err != nil {
-				return
-			}
-			if p.lines.Len() >= 100 {
-				p.lines.Get(1)
-			}
-			p.lines.Put(string(line))
-		}
-	}()
-
-	go func() {
-		defer wg.Done()
-		reader := bufio.NewReaderSize(errReader, 8192)
-		for {
-			line, _, err := reader.ReadLine()
-			if err != nil {
-				return
-			}
-			if p.lines.Len() >= 100 {
-				p.lines.Get(1)
-			}
-			p.lines.Put(string(line))
-		}
-	}()
+	cmd.Stdout = p.logWriter
+	cmd.Stderr = p.logWriter
 
 	go func() {
 		err := cmd.Run()
 		if err != nil {
+			logger.Error("Failure in running xray-core:", err)
 			p.exitErr = err
 		}
-		wg.Wait()
 	}()
 
 	p.refreshVersion()

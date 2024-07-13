@@ -4,16 +4,19 @@ import (
 	"encoding/json"
 	"errors"
 	"sync"
+
 	"x-ui/logger"
 	"x-ui/xray"
 
 	"go.uber.org/atomic"
 )
 
-var p *xray.Process
-var lock sync.Mutex
-var isNeedXrayRestart atomic.Bool
-var result string
+var (
+	p                 *xray.Process
+	lock              sync.Mutex
+	isNeedXrayRestart atomic.Bool
+	result            string
+)
 
 type XrayService struct {
 	inboundService InboundService
@@ -87,7 +90,6 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 			// check users active or not
 			clientStats := inbound.ClientStats
 			for _, clientTraffic := range clientStats {
-
 				indexDecrease := 0
 				for index, client := range clients {
 					c := client.(map[string]interface{})
@@ -95,21 +97,16 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 						if !clientTraffic.Enable {
 							clients = RemoveIndex(clients, index-indexDecrease)
 							indexDecrease++
-							logger.Info("Remove Inbound User", c["email"], "due the expire or traffic limit")
-
+							logger.Infof("Remove Inbound User %s due to expiration or traffic limit", c["email"])
 						}
-
 					}
 				}
-
 			}
 
 			// clear client config for additional parameters
 			var final_clients []interface{}
 			for _, client := range clients {
-
 				c := client.(map[string]interface{})
-
 				if c["enable"] != nil {
 					if enable, ok := c["enable"].(bool); ok && !enable {
 						continue
@@ -134,6 +131,32 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 
 			inbound.Settings = string(modifiedSettings)
 		}
+
+		if len(inbound.StreamSettings) > 0 {
+			// Unmarshal stream JSON
+			var stream map[string]interface{}
+			json.Unmarshal([]byte(inbound.StreamSettings), &stream)
+
+			// Remove the "settings" field under "tlsSettings" and "realitySettings"
+			tlsSettings, ok1 := stream["tlsSettings"].(map[string]interface{})
+			realitySettings, ok2 := stream["realitySettings"].(map[string]interface{})
+			if ok1 || ok2 {
+				if ok1 {
+					delete(tlsSettings, "settings")
+				} else if ok2 {
+					delete(realitySettings, "settings")
+				}
+			}
+
+			delete(stream, "externalProxy")
+
+			newStream, err := json.MarshalIndent(stream, "", "  ")
+			if err != nil {
+				return nil, err
+			}
+			inbound.StreamSettings = string(newStream)
+		}
+
 		inboundConfig := inbound.GenXrayInboundConfig()
 		xrayConfig.InboundConfigs = append(xrayConfig.InboundConfigs, *inboundConfig)
 	}
@@ -142,11 +165,20 @@ func (s *XrayService) GetXrayConfig() (*xray.Config, error) {
 
 func (s *XrayService) GetXrayTraffic() ([]*xray.Traffic, []*xray.ClientTraffic, error) {
 	if !s.IsXrayRunning() {
-		return nil, nil, errors.New("xray is not running")
+		err := errors.New("xray is not running")
+		logger.Debug("Attempted to fetch Xray traffic, but Xray is not running:", err)
+		return nil, nil, err
 	}
-	s.xrayAPI.Init(p.GetAPIPort())
+	apiPort := p.GetAPIPort()
+	s.xrayAPI.Init(apiPort)
 	defer s.xrayAPI.Close()
-	return s.xrayAPI.GetTraffic(true)
+
+	traffic, clientTraffic, err := s.xrayAPI.GetTraffic(true)
+	if err != nil {
+		logger.Debug("Failed to fetch Xray traffic:", err)
+		return nil, nil, err
+	}
+	return traffic, clientTraffic, nil
 }
 
 func (s *XrayService) RestartXray(isForce bool) error {
@@ -159,7 +191,7 @@ func (s *XrayService) RestartXray(isForce bool) error {
 		return err
 	}
 
-	if p != nil && p.IsRunning() {
+	if s.IsXrayRunning() {
 		if !isForce && p.GetConfig().Equals(xrayConfig) {
 			logger.Debug("It does not need to restart xray")
 			return nil
@@ -179,7 +211,7 @@ func (s *XrayService) RestartXray(isForce bool) error {
 func (s *XrayService) StopXray() error {
 	lock.Lock()
 	defer lock.Unlock()
-	logger.Debug("stop xray")
+	logger.Debug("Attempting to stop Xray...")
 	if s.IsXrayRunning() {
 		return p.Stop()
 	}

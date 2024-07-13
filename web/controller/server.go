@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"regexp"
 	"time"
+
 	"x-ui/web/global"
 	"x-ui/web/service"
 
@@ -104,7 +105,7 @@ func (a *ServerController) stopXrayService(c *gin.Context) {
 		jsonMsg(c, "", err)
 		return
 	}
-	jsonMsg(c, "Xray stoped", err)
+	jsonMsg(c, "Xray stopped", err)
 }
 
 func (a *ServerController) restartXrayService(c *gin.Context) {

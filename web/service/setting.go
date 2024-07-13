@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
 	"x-ui/database"
 	"x-ui/database/model"
 	"x-ui/logger"
@@ -16,6 +17,7 @@ import (
 	"x-ui/util/random"
 	"x-ui/util/reflect_util"
 	"x-ui/web/entity"
+	"x-ui/xray"
 )
 
 //go:embed config.json
@@ -31,11 +33,14 @@ var defaultValueMap = map[string]string{
 	"secret":             random.Seq(32),
 	"webBasePath":        "/",
 	"sessionMaxAge":      "0",
+	"pageSize":           "50",
 	"expireDiff":         "0",
 	"trafficDiff":        "0",
+	"remarkModel":        "-ieo",
 	"timeLocation":       "Asia/Tehran",
 	"tgBotEnable":        "false",
 	"tgBotToken":         "",
+	"tgBotProxy":         "",
 	"tgBotChatId":        "",
 	"tgRunTime":          "@daily",
 	"tgBotBackup":        "false",
@@ -53,10 +58,17 @@ var defaultValueMap = map[string]string{
 	"subUpdates":         "12",
 	"subEncrypt":         "true",
 	"subShowInfo":        "true",
+	"subURI":             "",
+	"subJsonPath":        "/json/",
+	"subJsonURI":         "",
+	"subJsonFragment":    "",
+	"subJsonMux":         "",
+	"subJsonRules":       "",
+	"datepicker":         "gregorian",
+	"warp":               "",
 }
 
-type SettingService struct {
-}
+type SettingService struct{}
 
 func (s *SettingService) GetDefaultJsonConfig() (interface{}, error) {
 	var jsonData interface{}
@@ -70,7 +82,7 @@ func (s *SettingService) GetDefaultJsonConfig() (interface{}, error) {
 func (s *SettingService) GetAllSetting() (*entity.AllSetting, error) {
 	db := database.GetDB()
 	settings := make([]*model.Setting, 0)
-	err := db.Model(model.Setting{}).Find(&settings).Error
+	err := db.Model(model.Setting{}).Not("key = ?", "xrayTemplateConfig").Find(&settings).Error
 	if err != nil {
 		return nil, err
 	}
@@ -241,6 +253,14 @@ func (s *SettingService) SetTgBotToken(token string) error {
 	return s.setString("tgBotToken", token)
 }
 
+func (s *SettingService) GetTgBotProxy() (string, error) {
+	return s.getString("tgBotProxy")
+}
+
+func (s *SettingService) SetTgBotProxy(token string) error {
+	return s.setString("tgBotProxy", token)
+}
+
 func (s *SettingService) GetTgBotChatId() (string, error) {
 	return s.getString("tgBotChatId")
 }
@@ -249,11 +269,11 @@ func (s *SettingService) SetTgBotChatId(chatIds string) error {
 	return s.setString("tgBotChatId", chatIds)
 }
 
-func (s *SettingService) GetTgbotenabled() (bool, error) {
+func (s *SettingService) GetTgbotEnabled() (bool, error) {
 	return s.getBool("tgBotEnable")
 }
 
-func (s *SettingService) SetTgbotenabled(value bool) error {
+func (s *SettingService) SetTgbotEnabled(value bool) error {
 	return s.setBool("tgBotEnable", value)
 }
 
@@ -289,8 +309,16 @@ func (s *SettingService) SetPort(port int) error {
 	return s.setInt("webPort", port)
 }
 
+func (s *SettingService) SetCertFile(webCertFile string) error {
+	return s.setString("webCertFile", webCertFile)
+}
+
 func (s *SettingService) GetCertFile() (string, error) {
 	return s.getString("webCertFile")
+}
+
+func (s *SettingService) SetKeyFile(webKeyFile string) error {
+	return s.setString("webKeyFile", webKeyFile)
 }
 
 func (s *SettingService) GetKeyFile() (string, error) {
@@ -307,6 +335,10 @@ func (s *SettingService) GetTrafficDiff() (int, error) {
 
 func (s *SettingService) GetSessionMaxAge() (int, error) {
 	return s.getInt("sessionMaxAge")
+}
+
+func (s *SettingService) GetRemarkModel() (string, error) {
+	return s.getString("remarkModel")
 }
 
 func (s *SettingService) GetSecretStatus() (bool, error) {
@@ -326,6 +358,16 @@ func (s *SettingService) GetSecret() ([]byte, error) {
 		}
 	}
 	return []byte(secret), err
+}
+
+func (s *SettingService) SetBasePath(basePath string) error {
+	if !strings.HasPrefix(basePath, "/") {
+		basePath = "/" + basePath
+	}
+	if !strings.HasSuffix(basePath, "/") {
+		basePath += "/"
+	}
+	return s.setString("webBasePath", basePath)
 }
 
 func (s *SettingService) GetBasePath() (string, error) {
@@ -369,17 +411,11 @@ func (s *SettingService) GetSubPort() (int, error) {
 }
 
 func (s *SettingService) GetSubPath() (string, error) {
-	subPath, err := s.getString("subPath")
-	if err != nil {
-		return "", err
-	}
-	if !strings.HasPrefix(subPath, "/") {
-		subPath = "/" + subPath
-	}
-	if !strings.HasSuffix(subPath, "/") {
-		subPath += "/"
-	}
-	return subPath, nil
+	return s.getString("subPath")
+}
+
+func (s *SettingService) GetSubJsonPath() (string, error) {
+	return s.getString("subJsonPath")
 }
 
 func (s *SettingService) GetSubDomain() (string, error) {
@@ -394,8 +430,8 @@ func (s *SettingService) GetSubKeyFile() (string, error) {
 	return s.getString("subKeyFile")
 }
 
-func (s *SettingService) GetSubUpdates() (int, error) {
-	return s.getInt("subUpdates")
+func (s *SettingService) GetSubUpdates() (string, error) {
+	return s.getString("subUpdates")
 }
 
 func (s *SettingService) GetSubEncrypt() (bool, error) {
@@ -404,6 +440,50 @@ func (s *SettingService) GetSubEncrypt() (bool, error) {
 
 func (s *SettingService) GetSubShowInfo() (bool, error) {
 	return s.getBool("subShowInfo")
+}
+
+func (s *SettingService) GetPageSize() (int, error) {
+	return s.getInt("pageSize")
+}
+
+func (s *SettingService) GetSubURI() (string, error) {
+	return s.getString("subURI")
+}
+
+func (s *SettingService) GetSubJsonURI() (string, error) {
+	return s.getString("subJsonURI")
+}
+
+func (s *SettingService) GetSubJsonFragment() (string, error) {
+	return s.getString("subJsonFragment")
+}
+
+func (s *SettingService) GetSubJsonMux() (string, error) {
+	return s.getString("subJsonMux")
+}
+
+func (s *SettingService) GetSubJsonRules() (string, error) {
+	return s.getString("subJsonRules")
+}
+
+func (s *SettingService) GetDatepicker() (string, error) {
+	return s.getString("datepicker")
+}
+
+func (s *SettingService) GetWarp() (string, error) {
+	return s.getString("warp")
+}
+
+func (s *SettingService) SetWarp(data string) error {
+	return s.setString("warp", data)
+}
+
+func (s *SettingService) GetIpLimitEnable() (bool, error) {
+	accessLogPath, err := xray.GetAccessLogPath()
+	if err != nil {
+		return false, err
+	}
+	return (accessLogPath != "none" && accessLogPath != ""), nil
 }
 
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
@@ -425,4 +505,76 @@ func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
 		}
 	}
 	return common.Combine(errs...)
+}
+
+func (s *SettingService) GetDefaultXrayConfig() (interface{}, error) {
+	var jsonData interface{}
+	err := json.Unmarshal([]byte(xrayTemplateConfig), &jsonData)
+	if err != nil {
+		return nil, err
+	}
+	return jsonData, nil
+}
+
+func (s *SettingService) GetDefaultSettings(host string) (interface{}, error) {
+	type settingFunc func() (interface{}, error)
+	settings := map[string]settingFunc{
+		"expireDiff":    func() (interface{}, error) { return s.GetExpireDiff() },
+		"trafficDiff":   func() (interface{}, error) { return s.GetTrafficDiff() },
+		"pageSize":      func() (interface{}, error) { return s.GetPageSize() },
+		"defaultCert":   func() (interface{}, error) { return s.GetCertFile() },
+		"defaultKey":    func() (interface{}, error) { return s.GetKeyFile() },
+		"tgBotEnable":   func() (interface{}, error) { return s.GetTgbotEnabled() },
+		"subEnable":     func() (interface{}, error) { return s.GetSubEnable() },
+		"subURI":        func() (interface{}, error) { return s.GetSubURI() },
+		"subJsonURI":    func() (interface{}, error) { return s.GetSubJsonURI() },
+		"remarkModel":   func() (interface{}, error) { return s.GetRemarkModel() },
+		"datepicker":    func() (interface{}, error) { return s.GetDatepicker() },
+		"ipLimitEnable": func() (interface{}, error) { return s.GetIpLimitEnable() },
+	}
+
+	result := make(map[string]interface{})
+
+	for key, fn := range settings {
+		value, err := fn()
+		if err != nil {
+			return "", err
+		}
+		result[key] = value
+	}
+
+	if result["subEnable"].(bool) && (result["subURI"].(string) == "" || result["subJsonURI"].(string) == "") {
+		subURI := ""
+		subPort, _ := s.GetSubPort()
+		subPath, _ := s.GetSubPath()
+		subJsonPath, _ := s.GetSubJsonPath()
+		subDomain, _ := s.GetSubDomain()
+		subKeyFile, _ := s.GetSubKeyFile()
+		subCertFile, _ := s.GetSubCertFile()
+		subTLS := false
+		if subKeyFile != "" && subCertFile != "" {
+			subTLS = true
+		}
+		if subDomain == "" {
+			subDomain = strings.Split(host, ":")[0]
+		}
+		if subTLS {
+			subURI = "https://"
+		} else {
+			subURI = "http://"
+		}
+		if (subPort == 443 && subTLS) || (subPort == 80 && !subTLS) {
+			subURI += subDomain
+		} else {
+			subURI += fmt.Sprintf("%s:%d", subDomain, subPort)
+		}
+		if result["subURI"].(string) == "" {
+			result["subURI"] = subURI + subPath
+		}
+		if result["subJsonURI"].(string) == "" {
+			result["subJsonURI"] = subURI + subJsonPath
+		}
+	}
+
+	return result, nil
 }
